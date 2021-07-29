@@ -1,0 +1,22 @@
+{
+  "name": "Naveen",
+  "accNum": [
+    "1234567890"
+  ],
+  "atmPin": [
+    "1234"
+  ],
+  "bank": "ICICI",
+  "accType": "savings",
+  "ifsc": [
+    "HDFC1234"
+  ],
+  "branch": "krmr",
+  "time": "2021-07-22T22:13:28.501+05:30",
+  "mail": [
+    "naveen.galipelli@gmail.com"
+  ],
+  "number": [
+    "8985734713"
+  ]
+}

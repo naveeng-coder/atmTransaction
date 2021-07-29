@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+	
+	<flow name="createAccountFlow" doc:id="d0ebf729-8e8f-4053-b1ec-e4e0382a3ac5" >
+		<ee:transform doc:name="Transform Message" doc:id="cd967b02-52b5-46bc-8ec8-1b9928d8acaa">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="payloadFromBody"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	name : attributes.queryParams.customerName,
+	accNum : payload.accountNum joinBy "",
+	atmPin : payload.atmPin joinBy "",
+	bank : attributes.queryParams.bank,
+	accType : attributes.queryParams."type",
+	ifsc : payload.ifscCode joinBy "",
+	branch : attributes.queryParams.branchName,
+	time : now() as String,
+	mail : payload.mailId joinBy "",
+	number : payload.contact joinBy "",
+	depositAmount : payload.depositAmount joinBy ""
+	
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="a87fbad5-be47-4078-aa20-82c42cf0661d" config-ref="Database_Config1">
+			<db:sql ><![CDATA[SELECT * FROM mule.atmtransaction;]]></db:sql>
+		</db:select>
+		<choice doc:name="Choice" doc:id="6be0dd2e-7032-4087-966d-21fe6b939c50" >
+			<when expression="#[%dw 2.0&#10;&#10;output application/json&#10;&#10;var accNum = vars.payloadFromBody.accNum&#10;&#10;---&#10;&#10;payload.custAccNum contains accNum]">
+				<ee:transform doc:name="Transform Message" doc:id="5fe58571-5e92-44d1-bde5-5e776d716a84" >
+					<ee:message >
+						<ee:set-payload ><![CDATA["Account " ++ vars.payloadFromBody.accNum ++ " already exits"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+			<db:insert doc:name="Insert" doc:id="20f712ba-af0e-4ea7-b8dc-b69262e3cb7d" config-ref="Database_Config1">
+			<db:sql ><![CDATA[INSERT INTO `mule`.`atmtransaction` (`custName`, `custAccNum`, `atmPin`, `bankName`, `accountType`, `ifscCode`, `branchName`, `totalBalance`, `transactionTimeStamp`, `mailId`, `phoneNumber`) VALUES (:name, :accNum, :atmPin, :bank, :accType, :ifsc, :branch, :depositAmount, :time, :mail, :number);
+]]></db:sql>
+			<db:input-parameters ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	name :  vars.payloadFromBody.name,
+	accNum : vars.payloadFromBody.accNum,
+	atmPin : vars.payloadFromBody.atmPin,
+	bank : vars.payloadFromBody.bank,
+	accType : vars.payloadFromBody.accType,
+	ifsc : vars.payloadFromBody.ifsc,
+	branch : vars.payloadFromBody.branch,
+	depositAmount : vars.payloadFromBody.depositAmount,
+	time : vars.payloadFromBody.time,
+	mail : vars.payloadFromBody.mail,
+	number : vars.payloadFromBody.number	
+}]]]></db:input-parameters>
+		</db:insert>
+			
+				<ee:transform doc:name="Transform Message" doc:id="4808c94f-8377-410c-ae7b-f9fcd31987dd">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "Account Created Successfully with Account Number " ++ vars.payloadFromBody.accNum
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			
+</otherwise>
+		</choice>
+        
+</flow>
+</mule>

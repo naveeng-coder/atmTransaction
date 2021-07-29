@@ -1,0 +1,128 @@
+#%RAML 1.0
+title: mulesoft-atm-transaction-Naveen
+/createAccount:
+  post:
+    queryParameters:
+      customerName:
+        required: true
+        maxLength: 45
+        minLength: 4
+      bank:
+        enum: [ICICI,AXIS,HDFC]
+      type:
+        enum: [savings,current]
+      branchName:
+        minLength: 4
+        maxLength: 10
+    body:
+      application/json:
+        type: array
+        items:
+          properties:
+            accountNum:
+              type: string
+              minLength: 10
+              maxLength: 10
+            atmPin:
+              type: string
+              minLength: 4
+              maxLength: 4
+            ifscCode:
+              minLength: 4
+              maxLength: 10
+            depositAmount:
+              required: false
+              type: number
+            mailId:
+              type: string
+            contact:
+              type: string
+    responses:
+      201:
+        body:
+          application/json:
+            example:
+              {"status" : "Account Created Successfully with Account Number XXXXXXXX"}
+/checkBalance:
+  post:
+    queryParameters:
+      bank:
+        enum: [ICICI,AXIS,HDFC]
+      type:
+        enum: [savings,current]
+    body:
+      application/json:
+        type: array
+        items:
+          properties:
+            accountNum:
+              type: string
+              minLength: 10
+              maxLength: 10
+            atmPin:
+              type: string
+              minLength: 4
+              maxLength: 4
+    responses:
+      200:
+        body:
+          application/json:
+            example: {"status" : "your total balance is XXXXXXXX as on 20-May-2020 is XXXXXX"}
+
+/withDraw:
+  post:
+    queryParameters:
+      bank:
+        enum: [ICICI,AXIS,HDFC]
+      type:
+        enum: [savings,current]
+    body:
+      application/json:
+        type: array
+        items:
+          properties:
+            accountNum:
+              minLength: 10
+              maxLength: 10
+            atmPin:
+              type: string
+              minLength: 4
+              maxLength: 4
+            amountToBeWithdraw:
+              type: number
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              {"status": "amount XXXX is debited. Your total balance is XXXXXXXX"}
+
+/unblock:
+  put:
+    body:
+      application/json:
+        type: array
+        items:
+          properties:
+            user:
+              default: "admin"
+            password:
+              default: "admin"
+            accountNum:
+              type: string
+              minLength: 10
+              maxLength: 10
+            bank:
+              enum: [ICICI,AXIS,HDFC]
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              {"status": "Account XXXXXXX is unblocked"}
+        
+          
+              
+
+            
+        

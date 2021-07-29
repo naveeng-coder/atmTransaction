@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+	<flow name="checkBalanceFlow" doc:id="4d5c052e-c01c-4fec-81c3-1b4611b7b6f3" >
+		<ee:transform doc:name="Transform Message" doc:id="8bc1971a-8137-4089-b9cb-4e34c626641f" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="forCheckBalance" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"bank" : attributes.queryParams.bank,
+	"type" : attributes.queryParams."type",
+	"accountNum" : payload.accountNum joinBy "",
+	"atmPin" : payload.atmPin joinBy ""
+	
+}]]></ee:set-variable>
+			
+</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="e4076489-c260-40c1-909f-57dfeda05359" config-ref="Database_Config1">
+			<db:sql><![CDATA[SELECT * FROM mule.atmtransaction;]]></db:sql>
+		</db:select>
+		<set-variable value='#[%dw 2.0&#10;output application/json&#10; &#10;var accDetails = payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank)&#10;var balance = accDetails.totalBalance joinBy ""&#10;&#10;---&#10;{&#10;	acNum : ( payload filter $.custAccNum == vars.forCheckBalance.accountNum),&#10;	accDetails : payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank),&#10;	balance : accDetails.totalBalance joinBy ""&#10;	&#10;	&#10;}]' doc:name="commonData" doc:id="440d38c5-e938-4300-bec7-a4ab6ca6fdb9" variableName="commonData"/>
+		<ee:transform doc:name="Transform Message" doc:id="c6bf26d0-e9ab-42a8-80d4-449e4df71b24" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var acNum = ( payload filter $.custAccNum == vars.forCheckBalance.accountNum) 
+var accDetails = payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank)
+---
+if (acNum.bankName contains vars.forCheckBalance.bank)	 
+		(if (((accDetails.accountStatus) joinBy "") contains "Active") 
+			(if(accDetails.atmPin contains vars.forCheckBalance.atmPin) "your total balance is " ++ ((accDetails.totalBalance) joinBy "") ++ " as on " ++ now()
+			else "wrongPin"
+			)
+		else "Account " ++ vars.forCheckBalance.accountNum ++ " is temporarily blocked. please visit nearest branch" 
+		)
+		
+else "Account Number" ++ vars.forCheckBalance.accountNum ++  " does not exist. Enter the valid Details"
+
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Flow Reference" doc:id="cbae23fc-27d6-4b1b-a67b-1f2f32426ee9" name="ReceivingWrongPinRequest"/>
+	</flow>
+	<flow name="ReceivingWrongPinRequest" doc:id="ecaae567-235f-4523-a3eb-ba2673297ccf" >
+		<choice doc:name="Choice" doc:id="cccf3b19-636e-426e-9795-38de137a8f7f">
+			<when expression='#[payload == "wrongPin"]'>
+				<db:select doc:name="Select" doc:id="f81d0be9-cca1-46b9-9733-ea0b526c47f7" config-ref="Database_Config1">
+									<db:sql><![CDATA[SELECT * FROM mule.atmtransaction;]]></db:sql>
+								</db:select>
+								<flow-ref doc:name="Flow Reference" doc:id="85b512f0-c5e7-415d-8619-ad5fab24e3d4" name="processWhenWrongPin"/>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="61ad0039-969a-4a13-aa88-da75183967d7">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload
+//"your balance is " ++ vars.accDetails.totalBalance joinBy "" ++ " as on " ++ now()]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="processWhenWrongPin" doc:id="5475af52-2547-4a0c-8019-fcdcbfa98862" >
+		<ee:transform doc:name="Transform Message" doc:id="ad58cf97-c336-4988-a4d0-9887a2f0d4bd">
+									<ee:message>
+										<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+
+{
+	inc : vars.commonData.accDetails.wrongPin,
+	acNo : vars.commonData.accDetails.custAccNum 
+}
+ ]]></ee:set-payload>
+									</ee:message>
+									<ee:variables>
+									</ee:variables>
+								</ee:transform>
+		<db:update doc:name="Update" doc:id="b2ddcbce-9e5b-4dec-9b84-8144615425f6" config-ref="Database_Config1">
+									<db:sql><![CDATA[UPDATE `mule`.`atmtransaction` SET `wrongPin` = :inc WHERE `custAccNum` = :acNo;]]></db:sql>
+			<db:input-parameters><![CDATA[#[{
+	inc : (payload.inc joinBy "" ) as Number + 1,
+	acNo : payload.acNo joinBy ""
+}]]]></db:input-parameters>
+								
+</db:update>
+		<db:select doc:name="Select" doc:id="6c353448-a07e-4d45-a1e9-30c3c59110a0" config-ref="Database_Config1">
+									<db:sql><![CDATA[SELECT * FROM mule.atmtransaction;]]></db:sql>
+								</db:select>
+		<choice doc:name="Choice" doc:id="3830808a-2413-42c4-8cbd-6c081ca2658f">
+									<when expression='#[%dw 2.0&#10;&#10;output application/json&#10;var accDetails = payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank)&#10;---&#10;//(payload.wrongPin joinBy "") &gt;= "3"&#10;(accDetails.wrongPin joinBy "") &gt;= "3"]'>
+									<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank)]" doc:name="accDetails" doc:id="6cb158d6-8b74-4e4f-b64b-f8ad72bf1875" variableName="accDetails"/>
+				<flow-ref doc:name="Flow Reference" doc:id="fb2a0003-91f2-4a1f-89a4-7e98a027c86f" name="checkBalanceSub_Flow"/>
+									
+</when>
+			<otherwise>
+										<ee:transform doc:name="Transform Message" doc:id="c09e1c66-30fd-47c4-97d4-e06d71af6f15">
+									<ee:message>
+										<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var accDetails = payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank)
+
+---
+
+if((accDetails.wrongPin joinBy "") == "1") "Login attempt Failed. Attempts Left : 2" 
+else if ((accDetails.wrongPin joinBy "") == "2") "Login attempt Failed. Attempts Left : 1"
+
+else ""
+]]></ee:set-payload>
+									</ee:message>
+								</ee:transform>
+				
+									</otherwise>
+								</choice>
+	</flow>
+	<sub-flow name="checkBalanceSub_Flow" doc:id="71b1dd8a-8c18-4b1d-8656-0cd2c381cbc3" >
+	<db:update doc:name="Update" doc:id="1ca039f5-8fb1-4d11-8da8-f8375748b6fe" config-ref="Database_Config1">
+											<db:sql><![CDATA[UPDATE `mule`.`atmtransaction` SET `accountStatus` = 'Blocked'  WHERE (`custAccNum` = :acNo);
+]]></db:sql>
+											<db:input-parameters><![CDATA[#[{
+		acNo : vars.accDetails.custAccNum joinBy ""
+}]]]></db:input-parameters>
+										</db:update>
+		<set-payload value='#[%dw 2.0 
+&#10;output application/json
+&#10;---
+&#10;"sorry! maximum attempts reached. your account " 
+&#10;++ (vars.accDetails.custAccNum joinBy "") ++ " is temporirly blocked. Please Reach nearest Branch"]' doc:name="Set Payload" doc:id="3b115381-abb3-4d71-867c-832ce585aa41" />
+	</sub-flow>
+	
+</mule>

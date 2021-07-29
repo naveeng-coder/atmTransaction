@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<types:mule xmlns:types="http://www.mulesoft.org/schema/mule/types">
+  <types:catalog>
+    <types:type name="custDetails" format="json">
+      <types:shape format="weave" example="data/data.json"><![CDATA[%dw 2.0
+
+type custDetails = {|
+  name: String, 
+  accNum: Array<String>, 
+  atmPin: Array<String>, 
+  bank: String, 
+  accType: String, 
+  ifsc: Array<String>, 
+  branch: String, 
+  time: String, 
+  mail: Array<String>, 
+  number: Array<String>
+|} {"example": "{\\\"name\\\":\\\"Naveen\\\",\\\"accNum\\\":[\\\"1234567890\\\"],\\\"atmPin\\\":[\\\"1234\\\"],\\\"bank\\\":\\\"ICICI\\\",\\\"accType\\\":\\\"savings\\\",\\\"ifsc\\\":[\\\"HDFC1234\\\"],\\\"branch\\\":\\\"krmr\\\",\\\"time\\\":\\\"2021-07-22T21:19:57.956+05:30\\\",\\\"mail\\\":[\\\"naveen.galipelli@gmail.com\\\"],\\\"number\\\":[\\\"8985734713\\\"]}"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="payload" format="json">
+      <types:shape format="weave" example="examples/New Text Document.json"><![CDATA[%dw 2.0
+
+type payload = Array<Any> {"example": "[]"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="payload1" format="json">
+      <types:shape format="weave" example="examples/New Text Document-1.json"><![CDATA[%dw 2.0
+
+type payload1 = Array<Any> {"example": "[]"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="payload2" format="json">
+      <types:shape format="weave" example="data/New Text Document.json"><![CDATA[%dw 2.0
+
+type payload2 = Array<Any> {"example": "[]"}
+
+]]></types:shape>
+    </types:type>
+  </types:catalog>
+  <types:enrichment select="#cd967b02-52b5-46bc-8ec8-1b9928d8acaa"/>
+  <types:enrichment select="#65cd5124-0b3d-4b28-b359-420b28350c74"/>
+  <types:enrichment select="#ad58cf97-c336-4988-a4d0-9887a2f0d4bd"/>
+  <types:enrichment select="#c6bf26d0-e9ab-42a8-80d4-449e4df71b24"/>
+</types:mule>

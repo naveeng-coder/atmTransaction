@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+	<flow name="withDrawFlow" doc:id="9ef8ee89-d1bb-4391-97b6-12dd66f710e3" >
+		<ee:transform doc:name="Transform Message" doc:id="a57f4579-3b6b-4f1d-b599-611359185eff" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="forCheckBalance" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"bank" : attributes.queryParams.bank,
+	"type" : attributes.queryParams."type",
+	"accountNum" : payload.accountNum joinBy "",
+	"atmPin" : payload.atmPin joinBy "",
+	"amountToBeWithdraw" : payload.amountToBeWithdraw joinBy ""
+}]]></ee:set-variable>
+			
+</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="30a2646d-e42a-4078-945f-ad1377220fbf" config-ref="Database_Config1">
+			<db:sql><![CDATA[SELECT * FROM mule.atmtransaction;]]></db:sql>
+		</db:select>
+		<set-variable value='#[%dw 2.0&#10;output application/json&#10; &#10;var accDetails = payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank)&#10;var balance = accDetails.totalBalance joinBy ""&#10;var amountToBeWithdraw = vars.forCheckBalance.amountToBeWithdraw&#10;var balAfterTransaction = balance - amountToBeWithdraw&#10;---&#10;{&#10;	acNum : ( payload filter $.custAccNum == vars.forCheckBalance.accountNum),&#10;	accDetails : payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank),&#10;	balance : accDetails.totalBalance joinBy "",&#10;	amountToBeWithdraw : vars.forCheckBalance.amountToBeWithdraw,&#10;	balAfterTransaction : balance - amountToBeWithdraw,&#10;	&#10;}]' doc:name="commonData" doc:id="8bb00485-f6f5-40a4-aa07-632cb50f82d7" variableName="commonData"/>
+		<ee:transform doc:name="process" doc:id="65cd5124-0b3d-4b28-b359-420b28350c74" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+
+var withDraw = if ((vars.commonData.balance < vars.commonData.amountToBeWithdraw) or (vars.commonData.balance == "0")) " Insufficient Funds" else if (vars.commonData.balance >= vars.commonData.amountToBeWithdraw) Mule::lookup("withDrawFlow1",vars.commonData.balAfterTransaction) else ""
+---
+
+if (vars.commonData.acNum.bankName contains vars.forCheckBalance.bank)	 
+		(if (((vars.commonData.accDetails.accountStatus) joinBy "") contains "Active") 
+			(if(vars.commonData.accDetails.atmPin contains vars.forCheckBalance.atmPin) withDraw
+			else "wrongPin"
+			)
+		else "Account " ++ vars.forCheckBalance.accountNum ++ " is temporarily blocked. please visit nearest branch" 
+		)
+		
+else "Account Number" ++ vars.forCheckBalance.accountNum ++  " does not exist. Enter the valid Details"
+
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			
+</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Flow Reference" doc:id="76bec2e8-5012-4d76-8f68-cad8d24d729a" name="ReceivingWrongPinRequest"/>
+	</flow>
+	<flow name="withDrawFlow1" doc:id="2033611a-9b82-4318-9529-ad1d72b96e26" >
+		<db:update doc:name="Update" doc:id="ff710cb2-d3be-48e9-b7d0-1908582267e8" config-ref="Database_Config1">
+			<db:sql><![CDATA[UPDATE `mule`.`atmtransaction` SET `totalBalance` = :balance WHERE (`custAccNum` = :acNo);
+]]></db:sql>
+			<db:input-parameters><![CDATA[#[{
+	acNo : vars.forCheckBalance.accountNum,
+	balance : payload
+	
+}]]]></db:input-parameters>
+		</db:update>
+		<ee:transform doc:name="Transform Message" doc:id="ba6c2fba-0afa-49c0-8c32-eaef01bddfe4">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "amount " ++ vars.forCheckBalance.amountToBeWithdraw ++ " is debited. Your total balance is "  ++ vars.commonData.balAfterTransaction as Number
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+
+	</mule>

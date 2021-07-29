@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+
+	<flow name="unblockFlow" doc:id="373a54d7-8616-447a-bf3d-4d4c649f0fe4" >
+		<ee:transform doc:name="Transform Message" doc:id="396239c6-aa2a-4c0c-acc7-88920d53d557" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="forCheckBalance" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+        "user" : payload.user joinBy "",
+        "password" : payload.password joinBy "",
+        "accountNum" : payload.accountNum joinBy "",
+        "bank" : payload.bank joinBy ""
+    }]]></ee:set-variable>
+			
+</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="00fe9081-a8dd-4e88-a91a-d95d7bd8e51d" config-ref="Database_Config1">
+			<db:sql><![CDATA[SELECT * FROM mule.atmtransaction;]]></db:sql>
+		</db:select>
+		<set-variable value='#[%dw 2.0&#10;&#10;output application/json&#10;&#10;---&#10;&#10;{&#10;&#10;	acNum : ( payload filter $.custAccNum == vars.forCheckBalance.accountNum),&#10;&#10;	accDetails : payload filter ($.custAccNum == vars.forCheckBalance.accountNum and $.bankName == vars.forCheckBalance.bank),&#10;&#10;}]' doc:name="commonData" doc:id="1ef33a48-42f4-4be5-9704-5e4c92e419ba" variableName="commonData"/>
+		<ee:transform doc:name="process" doc:id="f0165363-f1e4-4bcb-9e18-2b62a5fdad8c" >
+			<ee:message >
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+
+var Replace = (vars.commonData.accDetails.accountStatus joinBy "") replace "Blocked" with ("Active")
+---
+
+if (vars.commonData.acNum.bankName contains vars.forCheckBalance.bank)	 
+		(if (((vars.commonData.accDetails.accountStatus) joinBy "") contains "Active") 
+			"Account " ++ vars.forCheckBalance.accountNum ++ " is Active"
+			else if (((vars.commonData.accDetails.accountStatus) joinBy "") contains "Blocked") Mule::lookup("updateToActive",Replace)  else ""
+			)
+		
+		
+else "Account Number" ++ vars.forCheckBalance.accountNum ++  " does not exist. Enter the valid Details"
+
+]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			
+</ee:variables>
+		</ee:transform>
+		<ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "Account " ++ vars.forCheckBalance.accountNum ++" is unblocked"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+	
+</flow>
+	<flow name="updateToActive" doc:id="e0104be6-6270-4e16-9f47-0904ab740b85" >
+	<db:update doc:name="Update" doc:id="73e189c2-b10f-4493-8422-c4f5599741aa" config-ref="Database_Config1">
+											<db:sql><![CDATA[UPDATE `mule`.`atmtransaction` SET `accountStatus` = :replace, `wrongPin` = '0' WHERE (`custAccNum` = :acNo);
+]]></db:sql>
+											<db:input-parameters><![CDATA[#[{
+		replace : payload,
+		acNo : vars.commonData.accDetails.custAccNum joinBy ""
+}]]]></db:input-parameters>
+										</db:update>
+	
+</flow>
+	
+</mule>
